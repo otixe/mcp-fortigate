@@ -42,3 +42,5 @@ end
 
 The `trusthost1` field is essential — it limits where a compromised token
 can be used from.
+
+If you cannot use GitHub Security Advisories, email **otixecv@gmail.com** with the subject `SECURITY: mcp-fortigate`. Please do not open a public issue for vulnerabilities.
