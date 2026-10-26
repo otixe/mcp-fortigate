@@ -1,0 +1,26 @@
+$ python client_demo.py   # MCP client -> mcp-fortigate -> synthetic FortiGate API
+tools: ['list_policies', 'get_policy', 'list_addresses', 'list_address_groups', 'audit_policy']
+{
+  "audited": 2,
+  "policies_with_findings": 1,
+  "results": {
+    "7": [
+      {
+        "severity": "critical",
+        "title": "any\u2192any accept policy",
+        "recommendation": "Replace 'all' with explicit address objects on at least one side."
+      },
+      {
+        "severity": "high",
+        "title": "service ALL \u2014 any future CVE in any service is exposed",
+        "recommendation": "Restrict to named services only."
+      },
+      {
+        "severity": "medium",
+        "title": "logging disabled on accept policy",
+        "recommendation": "Enable logtraffic=all for audit trail."
+      }
+    ],
+    "99": []
+  }
+}

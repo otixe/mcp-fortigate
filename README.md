@@ -1,62 +1,65 @@
-# mcp-fortigate
+<p align="center">
+  <img src="media/banner.svg" alt="mcp-fortigate — Read-only FortiGate tools for any MCP client, over stdio." width="100%">
+</p>
 
-<div align="center">
+<p align="center">
+  <a href="https://github.com/otixe/mcp-fortigate/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/otixe/mcp-fortigate/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-65d8ba?style=flat-square&labelColor=102127"></a>
+  <img alt="python: 3.10+" src="https://img.shields.io/badge/python-3.10%2B-65d8ba?style=flat-square&labelColor=102127">
+  <img alt="MCP: stdio" src="https://img.shields.io/badge/MCP-stdio-65d8ba?style=flat-square&labelColor=102127">
+  <img alt="access: read-only" src="https://img.shields.io/badge/access-read-only-65d8ba?style=flat-square&labelColor=102127">
+</p>
 
-🔌 **MCP server for FortiGate firewalls**
+**An [MCP](https://modelcontextprotocol.io) server that lets an agent inspect and audit FortiGate configuration.** Five configuration-read tools, `GET` requests only; no configuration-write tool is implemented.
 
-*Let Claude (and other MCP-compatible agents) audit your firewall — safely, read-only*
+## The problem
 
-[![CI](https://github.com/otixe/mcp-fortigate/actions/workflows/ci.yml/badge.svg)](https://github.com/otixe/mcp-fortigate/actions/workflows/ci.yml)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![MCP](https://img.shields.io/badge/MCP-1.0-7c3aed.svg)](https://modelcontextprotocol.io)
+Giving a conversational agent access to a firewall is attractive (ask "which policies allow ALL services from broad subnets?") and risky. A server that merely *promises* to be careful is not the same as one that has no write path at all.
 
-</div>
+## The approach
 
----
-
-## What is this?
-
-A [Model Context Protocol](https://modelcontextprotocol.io) server that exposes
-FortiGate firewall data to LLM agents over stdio.
-
-Connect it to Claude Desktop, Cursor, or any MCP client — your agent can now:
-
-- 🔍 Inspect firewall policies, address objects, address groups, and services
-- 🕸️ Detect risky umbrella rules and overly broad sources
-- 📊 Generate audit reports on demand
-- 🛡️ **Read-only by design** — agent literally cannot modify your firewall
-
-The complement to [`fortigate-policy-auditor`](https://github.com/otixe/fortigate-policy-auditor):
-that runs as a CLI/CI tool, this one lets a conversational agent drive the audit.
-
----
-
-## Tools exposed
-
-| Tool | Purpose |
-|------|---------|
-| `list_policies` | List firewall policies with filters (interface, action, status) |
-| `get_policy` | Fetch a single policy with full details |
-| `list_addresses` | Enumerate address objects |
-| `list_address_groups` | Enumerate address groups |
-| `audit_policy` | Run direct + indirect risk checks against one or all policies |
-
-All tools are **read-only**. No `set`, no `edit`, no `delete` operations are
-exposed under any circumstance.
-
----
-
-## Install
-
-```bash
-pip install mcp-fortigate
+```mermaid
+flowchart LR
+  C["MCP client<br/>Claude Desktop · Cursor · your agent"] <-->|stdio| S[mcp-fortigate]
+  S -->|"HTTPS GET only<br/>read-only API token"| F[("FortiGate REST API<br/>/api/v2/cmdb")]
+  S --> A["built-in checks<br/>any→any · service ALL · no logging"]
 ```
 
-## Use with Claude Desktop
+| Tool | Purpose |
+| --- | --- |
+| `list_policies` | Policies with id, name, action, status, sources, destinations, services. |
+| `get_policy` | One policy in full. |
+| `list_addresses` | Address objects. |
+| `list_address_groups` | Address groups. |
+| `audit_policy` | Run the direct-risk checks on one policy (`policy_id`) or on all of them. |
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
-or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+The HTTP client implements only `GET`: there is no `set`, `edit` or `delete` code path to misuse. Defence in depth still applies on the device — give the API user a read-only admin profile and restrict it to the host running this server (see [SECURITY.md](SECURITY.md)).
+
+## See it run
+
+An MCP client starts the server, lists its tools and calls `audit_policy` against a **synthetic** FortiGate API (two invented policies on localhost):
+
+<p align="center">
+  <img src="media/demo.svg" alt="Terminal capture: an MCP client lists the five tools and audits two synthetic policies; policy 7 yields critical, high and medium findings." width="92%">
+</p>
+
+<sub>Terminal capture: an MCP client lists the five tools and audits two synthetic policies; policy 7 yields critical, high and medium findings.</sub>
+
+## Quickstart
+
+Python 3.10+. Not on PyPI yet:
+
+```bash
+pip install "git+https://github.com/otixe/mcp-fortigate.git"
+export FORTIGATE_HOST=firewall.example.com
+export FORTIGATE_TOKEN=...            # a read-only API token
+export FORTIGATE_VDOM=root            # optional, default root
+mcp-fortigate                         # speaks MCP over stdio
+```
+
+Optional: `FORTIGATE_VERIFY=false` disables TLS verification for lab devices (on by default).
+
+Claude Desktop (`claude_desktop_config.json`) or any client that launches stdio servers:
 
 ```json
 {
@@ -73,51 +76,31 @@ or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 }
 ```
 
-Restart Claude Desktop. Your agent now has firewall-aware tools.
+Then ask: *"Audit the firewall for policies that grant ALL services from broad subnets, and suggest least-privilege replacements."* The agent calls `list_policies`, then `audit_policy`, and reports.
 
-## Use with any MCP client
+## Scope and limits
 
-```bash
-export FORTIGATE_HOST=firewall.example.com
-export FORTIGATE_TOKEN=your-readonly-token
-mcp-fortigate  # listens on stdio
-```
+- The built-in checks are the **direct** ones (any→any accept, service `ALL`, logging disabled). Indirect "umbrella" exposure analysis is not implemented here.
+- The token’s actual permissions must be restricted on the device. No real FortiGate authentication, permission enforcement or device behavior was validated; the demos and tests use synthetic responses.
+- Needs the `mcp` Python SDK **1.x** (`mcp>=1.0,<2`); the server uses the 1.x decorator API.
+- Tool results are returned as JSON text.
 
----
+## An honest note on MCP at scale
 
-## Example prompt
+Five tools are cheap to expose directly. A platform with dozens of tools should not load every definition into every request; that is the motivation for [AMA](https://github.com/otixe/pi-oficinas), which keeps a small stable direct set and reaches the rest through a code sandbox.
 
-> "Audit the firewall for any policies that grant `ALL` services from broad
-> internal subnets. For each finding, suggest a least-privilege replacement."
+## Part of the Otixe agent platform
 
-The agent will call `list_policies`, then `audit_policy` on suspicious ones,
-then return a curated report with concrete recommendations.
+Otixe builds persistent, accountable agent teams: **Pi** (runtime) → **Oficinas** (persistent teams) ↔ **Cerebro** (shared memory and work state) ↔ **Sinapsis** (web control surface), with **AMA** connecting the runtime to Cerebro.
 
----
+A worked example of a deliberately narrow MCP surface: few tools, one direction of data flow, no write path.
 
-## Security
+[Otixe profile](https://github.com/otixe) · [Platform manual](https://github.com/otixe/plataforma) · [pi-oficinas](https://github.com/otixe/pi-oficinas)
 
-This server is **read-only** by construction. The underlying API client only
-implements `GET` operations. There is no code path that produces a mutation.
+## Validation
 
-For the FortiGate side:
-
-```
-config system api-user
-    edit "mcp-readonly"
-        set accprofile "audit_readonly"
-        set vdom "root"
-        set trusthost1 <host-running-mcp-server>/32
-    next
-end
-```
-
-See [`SECURITY.md`](SECURITY.md) for the full threat model and IAM recommendations.
-
----
+See [VALIDATION.md](VALIDATION.md) for the local Python matrix, reproducible checks and unproven integration boundaries. GitHub Actions has not been run by this delivery.
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
-Built by [@otixe](https://github.com/otixe) — DevOps & Agentic Systems Engineer · 🇨🇱

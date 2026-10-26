@@ -5,9 +5,11 @@
 This MCP server only implements GET HTTP operations against the FortiGate API.
 There is no code path through which an LLM agent could mutate firewall state.
 
-## Reporting issues
+## Reporting a vulnerability
 
-📧 `https://github.com/otixe` with subject `[SECURITY]`. Response within 72h.
+Please use [Report a vulnerability](https://github.com/otixe/mcp-fortigate/security/advisories/new) (GitHub Security Advisories).
+Do not post tokens, credentials, private configuration or personal data in public issues.
+If private reporting is not enabled, request that the maintainer enables it without disclosing vulnerability details.
 
 ## What you should NEVER commit
 
